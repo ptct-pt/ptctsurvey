@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Phân tích Khảo sát GV các HĐGD đặc thù FSC 2025-2026</title>
+<title>Phân tích & Báo cáo triển khai HĐGD đặc thù FSC 2025-2026</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -88,6 +88,11 @@ const REPORT_LINKS={
  'EN-GLOBAL':'https://docs.google.com/document/d/1Nv6In71c5tfKz4QXdAuB_8WKLF_VP031/view',
  'ALL':'https://docs.google.com/document/d/1duwN7JNTuKTFmBG-6iT3TTYAZ7FfRNUZ/view'
 };
+const MANAGER_REPORT_LINKS={
+ 'SMART':'https://docs.google.com/document/d/12jHDs-93o3OIMpMSlseryD7zm58OKG2w/view',
+ 'PDP':'',
+ 'EN-GLOBAL':'https://docs.google.com/document/d/1BOP5336UhI9wFNOs81uE4hJ9eo7uRmsV/view'
+};
 const ACCENT={'SMART':'#ff6b35','PDP':'#7c3aed','EN-GLOBAL':'#2563eb','ALL':'#0f766e'};
 const Q5L={1:'Rất không phù hợp',2:'Không phù hợp',3:'Tạm phù hợp',4:'Phù hợp',5:'Rất phù hợp'};
 const Q4L={1:'Quá nhẹ',2:'Hơi nhẹ',3:'Vừa vặn',4:'Hơi nặng/nhanh',5:'Quá nặng/nhanh'};
@@ -102,6 +107,43 @@ function avg(a){a=a.filter(x=>x!=null);return a.length?a.reduce((s,x)=>s+x,0)/a.
 function pct(n,t){return t?Math.round(100*n/t):0;}
 function dist(recs,key){const c={};recs.forEach(r=>{const v=r[key];if(v!=null)c[v]=(c[v]||0)+1;});return c;}
 function multiCount(recs,key){const c={};recs.forEach(r=>(r[key]||[]).forEach(v=>{if(v)c[v]=(c[v]||0)+1;}));return c;}
+function normalizeSuggestion(s){
+ return (s||'')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9\s]/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+function isMeaningfulSuggestion(s){
+ const t=(s||'').trim();
+ if(t.length<4)return false;
+ const n=normalizeSuggestion(t);
+ if(!n)return false;
+ const noValuePatterns=[
+    /^khong$/,
+    /^khong a$/,
+    /^khong co$/,
+    /^khong co a$/,
+    /^khong co y kien$/,
+    /^khong co y kien gi$/,
+    /^khong y kien$/,
+    /^khong kien nghi$/,
+    /^khong co kien nghi$/,
+    /^hien tai chua co$/,
+    /^hien tai chua co de xuat$/,
+    /^hien chua co$/,
+    /^hien chua co de xuat$/,
+    /^chua co$/,
+    /^chua co de xuat$/,
+    /^na$/,
+    /^n a$/,
+    /^none$/,
+    /^khong co gi$/,
+    /^khong y kien gi$/
+ ];
+ return !noValuePatterns.some(p=>p.test(n));
+}
 
 function bar(ctx,labels,vals,color,horizontal,maxY){
  const cfg={type:'bar',data:{labels,datasets:[{data:vals,backgroundColor:color,borderRadius:6,maxBarThickness:46}]},
@@ -123,9 +165,21 @@ function renderArea(area){
  // subnav
  const subs=[['ov','📌 Tổng quan'],['demo','🏫 Cơ cấu mẫu'],['rate','⭐ Đánh giá chương trình'],['val','💎 Giá trị khác biệt'],['chal','⚠️ Thuận lợi & Thách thức'],['cross','🔍 Phân tích chéo'],['sugg','💡 Kiến nghị GV']];
  const nav=mk('div','subnav');subs.forEach((s,i)=>{const t=mk('div','subtab'+(i==0?' active':''),s[1]);t.dataset.s=area+'-'+s[0];t.onclick=()=>{nav.querySelectorAll('.subtab').forEach(x=>x.classList.remove('active'));t.classList.add('active');host.querySelectorAll('.sub-sec').forEach(x=>x.classList.remove('active'));document.getElementById(area+'-'+s[0]).classList.add('active');};nav.appendChild(t);});
- const reportBtn=mk('div','subtab','📄 Xem báo cáo');
+ const reportBtn=mk('div','subtab','📄 Báo cáo GV');
  reportBtn.onclick=()=>window.open(REPORT_LINKS[area],'_blank','noopener');
  nav.appendChild(reportBtn);
+ if(area==='SMART'||area==='PDP'||area==='EN-GLOBAL'){
+  const managerReportBtn=mk('div','subtab','📘 Báo cáo phụ trách mảng');
+  managerReportBtn.onclick=()=>{
+   const link=MANAGER_REPORT_LINKS[area];
+   if(link){
+    window.open(link,'_blank','noopener');
+   }else{
+    alert('Mảng này chưa cập nhật link Báo cáo phụ trách mảng.');
+   }
+  };
+  nav.appendChild(managerReportBtn);
+ }
  host.appendChild(nav);
  const S={};subs.forEach((s,i)=>{const d=mk('div','sub-sec'+(i==0?' active':''));d.id=area+'-'+s[0];host.appendChild(d);S[s[0]]=d;});
 
@@ -192,7 +246,7 @@ function renderArea(area){
  th+='</table>';xc.appendChild(mk('div',null,th));S.cross.appendChild(xc);
 
  // ---- SUGGESTIONS ----
- const sg=recs.filter(r=>r.q11&&r.q11.trim().length>3);
+ const sg=recs.filter(r=>isMeaningfulSuggestion(r.q11));
  const sc=mk('div','card');sc.appendChild(mk('h3',null,'💡 Kiến nghị từ giáo viên (Câu 11)'));sc.appendChild(mk('div','desc',sg.length+' giáo viên gửi kiến nghị mở.'));
  const list=mk('div','sugg');sg.forEach(r=>{list.appendChild(mk('div','item','<span class="c">'+r.campus+'</span>'+r.q11.replace(/</g,'&lt;')));});
  sc.appendChild(list);S.sugg.appendChild(sc);
@@ -201,7 +255,7 @@ function renderArea(area){
 function renderAll(){
  const host=document.getElementById('ALL');host.innerHTML='';
  const nav=mk('div','subnav');
- const reportBtn=mk('div','subtab','📄 Xem báo cáo');
+ const reportBtn=mk('div','subtab','📄 Báo cáo tổng hợp');
  reportBtn.onclick=()=>window.open(REPORT_LINKS.ALL,'_blank','noopener');
  nav.appendChild(reportBtn);
  host.appendChild(nav);
